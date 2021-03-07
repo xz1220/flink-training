@@ -18,12 +18,19 @@
 
 package org.apache.flink.training.exercises.hourlytips;
 
+import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.training.exercises.common.datatypes.TaxiFare;
 import org.apache.flink.training.exercises.common.sources.TaxiFareGenerator;
 import org.apache.flink.training.exercises.common.utils.ExerciseBase;
-import org.apache.flink.training.exercises.common.utils.MissingSolutionException;
+import org.apache.flink.util.Collector;
+
+import javax.xml.crypto.Data;
 
 /**
  * The "Hourly Tips" exercise of the Flink training in the docs.
@@ -48,7 +55,20 @@ public class HourlyTipsExercise extends ExerciseBase {
 		// start the data generator
 		DataStream<TaxiFare> fares = env.addSource(fareSourceOrTest(new TaxiFareGenerator()));
 
-		throw new MissingSolutionException();
+		DataStream<Tuple3<Long,Long,Float>> hourlyTips = fares
+				.keyBy((TaxiFare fare) -> fare.driverId)
+				.window(TumblingEventTimeWindows.of(Time.hours(1)))
+				.process(new AddTips());
+
+		DataStream<Tuple3<Long,Long,Float>> HoulyMax = hourlyTips
+				.windowAll(TumblingEventTimeWindows.of(Time.hours(1)))
+				.maxBy(2);
+
+
+		printOrTest(HoulyMax);
+		env.execute("Hourly Tips (java)");
+
+//		throw new MissingSolutionException();
 
 //		printOrTest(hourlyMax);
 
@@ -56,4 +76,18 @@ public class HourlyTipsExercise extends ExerciseBase {
 //		env.execute("Hourly Tips (java)");
 	}
 
+	public static class AddTips extends ProcessWindowFunction<TaxiFare, Tuple3<Long, Long, Float>, Long, TimeWindow> {
+
+		@Override
+		public void process(Long aLong, Context context, Iterable<TaxiFare> elements, Collector<Tuple3<Long, Long, Float>> out) throws Exception {
+			float sumOfTips = 0F;
+			for (TaxiFare fare : elements) {
+				sumOfTips += fare.tip;
+			}
+			out.collect(Tuple3.of(context.window().getEnd(), aLong, sumOfTips));
+		}
+	}
+
 }
+
+
