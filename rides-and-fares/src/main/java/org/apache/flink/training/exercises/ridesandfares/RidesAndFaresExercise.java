@@ -18,6 +18,8 @@
 
 package org.apache.flink.training.exercises.ridesandfares;
 
+import org.apache.flink.api.common.state.ValueState;
+import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -60,7 +62,7 @@ public class RidesAndFaresExercise extends ExerciseBase {
 				.keyBy((TaxiFare fare) -> fare.rideId);
 
 		DataStream<Tuple2<TaxiRide, TaxiFare>> enrichedRides = rides
-				.connect(fares)
+				.connect(fares)  // 将具有相同的key的值发往算子实例
 				.flatMap(new EnrichmentFunction());
 
 		printOrTest(enrichedRides);
@@ -70,17 +72,47 @@ public class RidesAndFaresExercise extends ExerciseBase {
 
 	public static class EnrichmentFunction extends RichCoFlatMapFunction<TaxiRide, TaxiFare, Tuple2<TaxiRide, TaxiFare>> {
 
+		private ValueState<TaxiRide> taxiride;
+		private ValueState<TaxiFare> taxifare;
 		@Override
 		public void open(Configuration config) throws Exception {
-			throw new MissingSolutionException();
+			ValueStateDescriptor<TaxiRide> taxiRideValueStateDescriptor = new ValueStateDescriptor<TaxiRide>(
+					"taxiride",
+					TaxiRide.class
+			);
+			ValueStateDescriptor<TaxiFare> taxiFareValueStateDescriptor = new ValueStateDescriptor<TaxiFare>(
+					"taxifare",
+					TaxiFare.class
+			);
+
+			taxiride = getRuntimeContext().getState(taxiRideValueStateDescriptor);
+			taxifare = getRuntimeContext().getState(taxiFareValueStateDescriptor);
 		}
 
 		@Override
 		public void flatMap1(TaxiRide ride, Collector<Tuple2<TaxiRide, TaxiFare>> out) throws Exception {
+			TaxiFare fare = taxifare.value();
+			if (fare != null) {
+				taxifare.clear();
+				out.collect(
+						Tuple2.of(ride, fare)
+				);
+			}else{
+				taxiride.update(ride);
+			}
 		}
 
 		@Override
 		public void flatMap2(TaxiFare fare, Collector<Tuple2<TaxiRide, TaxiFare>> out) throws Exception {
+			TaxiRide ride = taxiride.value();
+			if (ride != null) {
+				taxiride.clear();
+				out.collect(
+						Tuple2.of(ride,fare)
+				);
+			}else{
+				taxifare.update(fare);
+			}
 		}
 	}
 }

@@ -45,6 +45,7 @@ public class RideCleansingExercise extends ExerciseBase {
 
 		// set up streaming execution environment
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+//		StreamExecutionEnvironment env = StreamExecutionEnvironment.createRemoteEnvironment()
 		env.setParallelism(ExerciseBase.parallelism);
 
 		// start the data generator
